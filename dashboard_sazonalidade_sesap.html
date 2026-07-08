@@ -259,7 +259,7 @@ try {
 
 function parseVal(s){
   if(!s) return 0;
-  return parseFloat(String(s).replace(/R\\$\s*/,'').replace(/\./g,'').replace(',','.')) || 0;
+  return parseFloat(String(s).replace(/R\$\s*/,'').replace(/\./g,'').replace(',','.')) || 0;
 }
 
 // Arquivo Excel carregado automaticamente do repositório
