@@ -89,6 +89,60 @@ body.light-mode {
   --muted: #495057;
   --border: #dee2e6;
 }
+.data-status {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 22px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+body.light-mode .data-status {
+  background: #ffffff;
+  border-color: #dee2e6;
+  color: #495057;
+}
+.data-status strong {
+  color: var(--text);
+}
+.status-tag {
+  background: rgba(82, 183, 136, 0.1);
+  border: 1px solid rgba(82, 183, 136, 0.2);
+  color: var(--accent);
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.72rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.status-tag.loading-state {
+  color: #ffd166;
+  background: rgba(253, 209, 102, 0.1);
+  border-color: rgba(253, 209, 102, 0.2);
+}
+.status-tag.error-state {
+  color: #e76f51;
+  background: rgba(231, 111, 81, 0.1);
+  border-color: rgba(231, 111, 81, 0.2);
+}
+@media(max-width:600px){
+  .data-status {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .status-tag {
+    width: 100%;
+    justify-content: center;
+  }
+}
 </style>
 </head>
 <body>
@@ -116,14 +170,12 @@ body.light-mode {
 
 <main>
 
-<div class="sec">Fonte de Dados</div>
-<div class="upload-area" onclick="document.getElementById('fileIn').click()">
-  <div class="u-icon">📂</div>
-  <p>Clique para carregar o arquivo <strong>Movimentacao_Grupos.xlsx</strong></p>
-  <p style="font-size:.72rem;margin-top:4px;">O sistema processará todas as abas automaticamente</p>
-  <div class="btn" style="margin-top:14px;">Selecionar Arquivo Excel</div>
-  <input type="file" id="fileIn" accept=".xlsx" onchange="loadFile(this)">
-  <div id="loadStatus" style="margin-top:12px;font-size:.78rem;color:var(--accent);display:none;"></div>
+<div class="data-status">
+  <div style="display:flex;align-items:center;gap:8px;">
+    <span style="font-size:1rem;">🔄</span>
+    <span>Base de Dados: <strong>Movimentacao_Grupos.xlsx</strong> (GitHub)</span>
+  </div>
+  <div id="loadStatus" class="status-tag loading-state"><span class="loading"></span> Carregando...</div>
 </div>
 
 <div id="dash" style="display:none">
@@ -210,52 +262,7 @@ function parseVal(s){
   return parseFloat(String(s).replace(/R\\$\s*/,'').replace(/\./g,'').replace(',','.')) || 0;
 }
 
-function loadFile(input){
-  const file = input.files[0];
-  if(!file) return;
-  const status = document.getElementById('loadStatus');
-  status.style.display='block';
-  status.innerHTML='<span class="loading"></span> Processando abas...';
-  
-  const reader = new FileReader();
-  reader.onload = function(e){
-    try{
-      const wb = XLSX.read(e.target.result, {type:'array', cellDates:false});
-      const allRows = [];
-      let sheetCount = 0;
-      
-      wb.SheetNames.forEach(sname => {
-        const ws = wb.Sheets[sname];
-        const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
-        if(rows.length < 2) return;
-        sheetCount++;
-        
-        for(let i=1; i<rows.length; i++){
-          const r = rows[i];
-          const dateStr = String(r[3]||'').trim();
-          const dm = dateStr.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-          if(!dm) continue;
-          const month = parseInt(dm[2]);
-          const year = parseInt(dm[3]);
-          if(year !== 2025) continue;
-          
-          const mat = String(r[4]||'').trim();
-          const qtde = parseFloat(String(r[5]||'0').replace(',','.')) || 0;
-          const total = parseVal(r[6]);
-          if(qtde <= 0 || !mat) continue;
-          
-          allRows.push({grupo: sname, mes: month, material: mat, qtde, total});
-        }
-      });
-      
-      status.innerHTML = `✓ ${sheetCount} abas processadas · ${allRows.length.toLocaleString('pt-BR')} registros carregados`;
-      buildData(allRows);
-    } catch(err){
-      status.innerHTML = '✗ Erro ao processar: ' + err.message;
-    }
-  };
-  reader.readAsArrayBuffer(file);
-}
+// Arquivo Excel carregado automaticamente do repositório
 
 function buildData(rows){
   const monthly_qtde = new Array(12).fill(0);
@@ -482,12 +489,80 @@ function searchItem(){
   });
 }
 
-// Auto-load embedded data if available
-window.addEventListener('load', ()=>{
-  if(EMBEDDED){
-    DATA = EMBEDDED;
-    renderDash();
-    document.querySelector('.upload-area').innerHTML += '<div style="margin-top:8px;font-size:.72rem;color:var(--accent)">✓ Dados pré-carregados · Carregue um arquivo para atualizar</div>';
+// Carregamento automático a partir do arquivo Excel no GitHub
+window.addEventListener('load', () => {
+  const statusEl = document.getElementById('loadStatus');
+  statusEl.className = 'status-tag loading-state';
+  statusEl.innerHTML = '<span class="loading"></span> Carregando dados automáticos...';
+  
+  let lastModifiedStr = '';
+  fetch('Movimentacao_Grupos.xlsx')
+    .then(response => {
+      if (!response.ok) throw new Error('Arquivo Excel não encontrado no repositório');
+      
+      const lastMod = response.headers.get('Last-Modified');
+      if (lastMod) {
+        const d = new Date(lastMod);
+        lastModifiedStr = 'Atualizado em: ' + d.toLocaleString('pt-BR', {
+          day: '2-digit', month: '2-digit', year: 'numeric',
+          hour: '2-digit', minute: '2-digit'
+        });
+      } else {
+        lastModifiedStr = 'Sincronizado via GitHub';
+      }
+      return response.arrayBuffer();
+    })
+    .then(ab => {
+      const wb = XLSX.read(ab, { type: 'array', cellDates: false });
+      const allRows = [];
+      let sheetCount = 0;
+      
+      wb.SheetNames.forEach(sname => {
+        const ws = wb.Sheets[sname];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+        if (rows.length < 2) return;
+        sheetCount++;
+        
+        for (let i = 1; i < rows.length; i++) {
+          const r = rows[i];
+          const dateStr = String(r[3] || '').trim();
+          const dm = dateStr.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+          if (!dm) continue;
+          const month = parseInt(dm[2]);
+          const year = parseInt(dm[3]);
+          if (year !== 2025) continue;
+          
+          const mat = String(r[4] || '').trim();
+          const qtde = typeof r[5] === 'number' ? r[5] : (parseFloat(String(r[5] || '0').replace(',', '.')) || 0);
+          const total = typeof r[6] === 'number' ? r[6] : parseVal(r[6]);
+          if (qtde <= 0 || !mat) continue;
+          
+          allRows.push({ grupo: sname, mes: month, material: mat, qtde, total });
+        }
+      });
+      
+      if (allRows.length > 0) {
+        statusEl.className = 'status-tag';
+        statusEl.innerHTML = `✓ ${lastModifiedStr}`;
+        buildData(allRows);
+      } else {
+        carregarCacheLocal();
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      statusEl.className = 'status-tag error-state';
+      statusEl.innerHTML = '✗ Erro ao carregar dados';
+      carregarCacheLocal();
+    });
+    
+  function carregarCacheLocal() {
+    if (EMBEDDED) {
+      DATA = EMBEDDED;
+      renderDash();
+      statusEl.className = 'status-tag';
+      statusEl.innerHTML = '✓ Dados Pré-carregados (Offline)';
+    }
   }
 });
 </script>
